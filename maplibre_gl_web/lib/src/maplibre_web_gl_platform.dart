@@ -395,10 +395,17 @@ class MapLibreMapController extends MapLibrePlatform
 
   @override
   Future<CameraPosition?> queryCameraPosition() async {
-    // Web implementation: MapLibre GL JS doesn't have direct camera position query
-    print('queryCameraPosition called in web');
-    // For future implementation, we could query the map's camera state
-    throw UnimplementedError();
+    // Read the current camera straight off the JS map. Independent of
+    // _trackCameraPosition (which only controls per-move callbacks): callers
+    // like the app's supercluster zoom need an on-demand read. Mirrors the
+    // native method-channel implementation of map#queryCameraPosition.
+    final center = _map.getCenter();
+    return CameraPosition(
+      bearing: _map.getBearing() as double,
+      target: LatLng(center.lat as double, center.lng as double),
+      tilt: _map.getPitch() as double,
+      zoom: _map.getZoom() as double,
+    );
   }
 
   @override
@@ -632,7 +639,11 @@ class MapLibreMapController extends MapLibrePlatform
           'height': photo.height,
           'data': data,
         },
-        {'sdf': sdf, 'pixelRatio': 1},
+        // Callers (e.g. the app's marker/cluster renderer) rasterize PNGs at
+        // the device pixel ratio, so the image must declare that ratio or
+        // maplibre-gl-js paints it at CSS-pixel scale — ~DPR× oversized on
+        // high-density screens.
+        {'sdf': sdf, 'pixelRatio': web.window.devicePixelRatio},
       );
     } else {
       print('MapLibreMapController: Image already exists on map: $name');
